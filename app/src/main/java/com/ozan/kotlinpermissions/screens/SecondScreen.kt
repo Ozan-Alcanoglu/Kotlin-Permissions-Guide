@@ -1,12 +1,10 @@
 package com.ozan.kotlinpermissions.screens
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,7 +37,16 @@ fun SecondScreen(onBack: () -> Unit) {
         contract = ActivityResultContracts.GetContent()
     ) { uri -> selectedImageUri = uri }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            Toast.makeText(context, "Fotoğraf çekildi!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // İzin launcherları (her izin için ayrı ayrı)
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -54,14 +61,6 @@ fun SecondScreen(onBack: () -> Unit) {
         }
     }
 
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            Toast.makeText(context, "Fotoğraf çekildi!", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -69,6 +68,61 @@ fun SecondScreen(onBack: () -> Unit) {
             cameraLauncher.launch(null)
         } else {
             PermissionManager.handlePermissionResult(context, Manifest.permission.CAMERA, isGranted)
+        }
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val intent = Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Ses kayıt uygulaması bulunamadı.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.RECORD_AUDIO, isGranted)
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.POST_NOTIFICATIONS, false)
+        }
+    }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val smsIntent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("sms:")
+            }
+            context.startActivity(smsIntent)
+        } else {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.SEND_SMS, isGranted)
+        }
+    }
+
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.READ_CONTACTS, false)
+        }
+    }
+
+    val callPhonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val callIntent = Intent(Intent.ACTION_DIAL)
+            context.startActivity(callIntent)
+        } else {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.CALL_PHONE, isGranted)
         }
     }
 
@@ -108,7 +162,7 @@ fun SecondScreen(onBack: () -> Unit) {
                     PermissionManager.checkAndRequestPermission(
                         context = context,
                         permission = permission,
-                        launcher = permissionLauncher,
+                        launcher = storagePermissionLauncher,
                         onGranted = {
                             galleryLauncher.launch("image/*")
                         }
@@ -170,7 +224,7 @@ fun SecondScreen(onBack: () -> Unit) {
                             }
                             "Ses Kaydı" -> {
                                 PermissionManager.checkAndRequestPermission(
-                                    context, permission, permissionLauncher,
+                                    context, permission, recordAudioPermissionLauncher,
                                     onGranted = {
                                         launchIntent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
                                     }
@@ -178,7 +232,7 @@ fun SecondScreen(onBack: () -> Unit) {
                             }
                             "Depolama" -> {
                                 PermissionManager.checkAndRequestPermission(
-                                    context, permission, permissionLauncher,
+                                    context, permission, storagePermissionLauncher,
                                     onGranted = {
                                         galleryLauncher.launch("*/*") // tüm dosyaları aç
                                     }
@@ -186,7 +240,7 @@ fun SecondScreen(onBack: () -> Unit) {
                             }
                             "SMS" -> {
                                 PermissionManager.checkAndRequestPermission(
-                                    context, permission, permissionLauncher,
+                                    context, permission, smsPermissionLauncher,
                                     onGranted = {
                                         val smsIntent = Intent(Intent.ACTION_VIEW).apply {
                                             data = Uri.parse("sms:")
@@ -197,16 +251,21 @@ fun SecondScreen(onBack: () -> Unit) {
                             }
                             "Telefon Arama" -> {
                                 PermissionManager.checkAndRequestPermission(
-                                    context, permission, permissionLauncher,
+                                    context, permission, callPhonePermissionLauncher,
                                     onGranted = {
                                         val callIntent = Intent(Intent.ACTION_DIAL)
                                         context.startActivity(callIntent)
                                     }
                                 )
                             }
+                            "Bildirim" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, notificationPermissionLauncher
+                                )
+                            }
                             else -> {
                                 PermissionManager.checkAndRequestPermission(
-                                    context, permission, permissionLauncher
+                                    context, permission, storagePermissionLauncher
                                 )
                             }
                         }
