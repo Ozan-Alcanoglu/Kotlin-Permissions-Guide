@@ -1,9 +1,12 @@
-// com/ozan/kotlinpermissions/screens/SecondScreen.kt
 package com.ozan.kotlinpermissions.screens
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -26,29 +28,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.ozan.kotlinpermissions.util.PermissionManager
-
-data class PermissionItem(
-    val name: String,
-    val manifestPermission: String
-)
-
-val permissionList = listOf(
-    PermissionItem("Gallery", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE),
-
-    PermissionItem("Audio", Manifest.permission.RECORD_AUDIO),
-    PermissionItem("Storage", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE),
-
-    PermissionItem("Location", Manifest.permission.ACCESS_FINE_LOCATION),
-    PermissionItem("Camera", Manifest.permission.CAMERA),
-    PermissionItem("Notification", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.POST_NOTIFICATIONS else ""),
-
-    PermissionItem("SMS", Manifest.permission.SEND_SMS),
-    PermissionItem("Contacts", Manifest.permission.READ_CONTACTS),
-    PermissionItem("Phone Call", Manifest.permission.CALL_PHONE),
-)
 
 @Composable
 fun SecondScreen(onBack: () -> Unit) {
@@ -75,6 +54,37 @@ fun SecondScreen(onBack: () -> Unit) {
         }
     }
 
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            Toast.makeText(context, "Fotoğraf çekildi!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cameraLauncher.launch(null)
+        } else {
+            PermissionManager.handlePermissionResult(context, Manifest.permission.CAMERA, isGranted)
+        }
+    }
+
+    fun launchIntent(action: String, type: String? = null) {
+        val intent = Intent(action)
+        if (type != null) {
+            intent.type = type
+        }
+        intent.addCategory(Intent.CATEGORY_DEFAULT)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Uygulama bulunamadı.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -104,8 +114,6 @@ fun SecondScreen(onBack: () -> Unit) {
                         }
                     )
                 }
-
-
         ) {
             if (selectedImageUri != null) {
                 Image(
@@ -127,7 +135,7 @@ fun SecondScreen(onBack: () -> Unit) {
             }
 
             Text(
-                text = "Gallery",
+                text = "Galeri",
                 color = Color.White,
                 fontSize = 24.sp,
                 modifier = Modifier
@@ -136,21 +144,78 @@ fun SecondScreen(onBack: () -> Unit) {
             )
         }
 
-        permissionList.drop(1).forEach { permissionItem ->
-            if (permissionItem.manifestPermission.isNotEmpty()) {
+        val permissionList = listOf(
+            "Ses Kaydı" to Manifest.permission.RECORD_AUDIO,
+            "Depolama" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE,
+            "Konum" to Manifest.permission.ACCESS_FINE_LOCATION,
+            "Kamera" to Manifest.permission.CAMERA,
+            "Bildirim" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.POST_NOTIFICATIONS else "",
+            "SMS" to Manifest.permission.SEND_SMS,
+            "Kişiler" to Manifest.permission.READ_CONTACTS,
+            "Telefon Arama" to Manifest.permission.CALL_PHONE,
+        )
+
+        permissionList.forEach { (name, permission) ->
+            if (permission.isNotEmpty()) {
                 Button(
                     onClick = {
-                        PermissionManager.checkAndRequestPermission(
-                            context = context,
-                            permission = permissionItem.manifestPermission,
-                            launcher = permissionLauncher
-                        )
+                        when (name) {
+                            "Kamera" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, cameraPermissionLauncher,
+                                    onGranted = { cameraLauncher.launch(null) }
+                                )
+                            }
+                            "Ses Kaydı" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, permissionLauncher,
+                                    onGranted = {
+                                        launchIntent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
+                                    }
+                                )
+                            }
+                            "Depolama" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, permissionLauncher,
+                                    onGranted = {
+                                        galleryLauncher.launch("*/*") // tüm dosyaları aç
+                                    }
+                                )
+                            }
+                            "SMS" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, permissionLauncher,
+                                    onGranted = {
+                                        val smsIntent = Intent(Intent.ACTION_VIEW).apply {
+                                            data = Uri.parse("sms:")
+                                        }
+                                        context.startActivity(smsIntent)
+                                    }
+                                )
+                            }
+                            "Telefon Arama" -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, permissionLauncher,
+                                    onGranted = {
+                                        val callIntent = Intent(Intent.ACTION_DIAL)
+                                        context.startActivity(callIntent)
+                                    }
+                                )
+                            }
+                            else -> {
+                                PermissionManager.checkAndRequestPermission(
+                                    context, permission, permissionLauncher
+                                )
+                            }
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp)
                 ) {
-                    Text(permissionItem.name)
+                    Text(name)
                 }
             }
         }
