@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.ContactsContract
 import android.provider.MediaStore
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,116 +31,93 @@ import com.ozan.kotlinpermissions.util.PermissionManager
 
 @Composable
 fun SecondScreen(onBack: () -> Unit) {
+
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        ActivityResultContracts.GetContent()
     ) { uri -> selectedImageUri = uri }
 
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
+        ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
-        if (bitmap != null) {
-            Toast.makeText(context, "Fotoğraf çekildi!", Toast.LENGTH_SHORT).show()
-        }
+        if (bitmap != null) Toast.makeText(context, "Fotoğraf çekildi!", Toast.LENGTH_SHORT).show()
     }
 
-    // İzin launcherları (her izin için ayrı ayrı)
-    val storagePermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            Manifest.permission.READ_MEDIA_IMAGES
-        else
-            Manifest.permission.READ_EXTERNAL_STORAGE
 
-        if (isGranted) {
-            galleryLauncher.launch("image/*")
-        } else {
-            PermissionManager.handlePermissionResult(context, permission, isGranted)
-        }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+
+        if (isGranted) galleryLauncher.launch("image/*")
+        else PermissionManager.handlePermissionResult(context, perm, false)
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            cameraLauncher.launch(null)
-        } else {
-            PermissionManager.handlePermissionResult(context, Manifest.permission.CAMERA, isGranted)
-        }
+        if (isGranted) cameraLauncher.launch(null)
+        else PermissionManager.handlePermissionResult(context, Manifest.permission.CAMERA, false)
     }
 
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val intent = Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
             try {
-                context.startActivity(intent)
+                context.startActivity(Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION))
             } catch (e: Exception) {
                 Toast.makeText(context, "Ses kayıt uygulaması bulunamadı.", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            PermissionManager.handlePermissionResult(context, Manifest.permission.RECORD_AUDIO, isGranted)
-        }
+        } else PermissionManager.handlePermissionResult(context, Manifest.permission.RECORD_AUDIO, false)
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            context.startActivity(intent)
+        } else PermissionManager.handlePermissionResult(context, Manifest.permission.ACCESS_FINE_LOCATION, false)
+    }
+
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val pickIntent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+            context.startActivity(pickIntent)
+        } else PermissionManager.handlePermissionResult(context, Manifest.permission.READ_CONTACTS, false)
+    }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val smsIntent = Intent(Intent.ACTION_VIEW).apply { data = Uri.parse("sms:") }
+            context.startActivity(smsIntent)
+        } else PermissionManager.handlePermissionResult(context, Manifest.permission.SEND_SMS, false)
+    }
+
+    val callPhonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) context.startActivity(Intent(Intent.ACTION_DIAL))
+        else PermissionManager.handlePermissionResult(context, Manifest.permission.CALL_PHONE, false)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (!isGranted) {
+        if (!isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             PermissionManager.handlePermissionResult(context, Manifest.permission.POST_NOTIFICATIONS, false)
         }
     }
 
-    val smsPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            val smsIntent = Intent(Intent.ACTION_VIEW).apply {
-                data = Uri.parse("sms:")
-            }
-            context.startActivity(smsIntent)
-        } else {
-            PermissionManager.handlePermissionResult(context, Manifest.permission.SEND_SMS, isGranted)
-        }
-    }
-
-    val contactsPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            PermissionManager.handlePermissionResult(context, Manifest.permission.READ_CONTACTS, false)
-        }
-    }
-
-    val callPhonePermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            val callIntent = Intent(Intent.ACTION_DIAL)
-            context.startActivity(callIntent)
-        } else {
-            PermissionManager.handlePermissionResult(context, Manifest.permission.CALL_PHONE, isGranted)
-        }
-    }
-
-    fun launchIntent(action: String, type: String? = null) {
-        val intent = Intent(action)
-        if (type != null) {
-            intent.type = type
-        }
-        intent.addCategory(Intent.CATEGORY_DEFAULT)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Uygulama bulunamadı.", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -147,6 +126,7 @@ fun SecondScreen(onBack: () -> Unit) {
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -154,39 +134,24 @@ fun SecondScreen(onBack: () -> Unit) {
                 .padding(8.dp)
                 .border(2.dp, Color.Cyan)
                 .clickable {
-                    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                        Manifest.permission.READ_MEDIA_IMAGES
-                    else
-                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
 
                     PermissionManager.checkAndRequestPermission(
-                        context = context,
-                        permission = permission,
-                        launcher = storagePermissionLauncher,
-                        onGranted = {
-                            galleryLauncher.launch("image/*")
-                        }
-                    )
+                        context, perm, storagePermissionLauncher
+                    ) { galleryLauncher.launch("image/*") }
                 }
         ) {
-            if (selectedImageUri != null) {
-                Image(
-                    painter = rememberAsyncImagePainter(selectedImageUri),
-                    contentDescription = "Selected Image",
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    painter = rememberAsyncImagePainter(
-                        ImageRequest.Builder(context)
-                            .data("https://via.placeholder.com/300.png")
-                            .crossfade(true)
-                            .build()
-                    ),
-                    contentDescription = "Placeholder",
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            val painter = if (selectedImageUri != null)
+                rememberAsyncImagePainter(selectedImageUri)
+            else rememberAsyncImagePainter(
+                ImageRequest.Builder(context)
+                    .data("https://via.placeholder.com/300.png")
+                    .crossfade(true)
+                    .build()
+            )
+
+            Image(painter, contentDescription = null, modifier = Modifier.fillMaxSize())
 
             Text(
                 text = "Galeri",
@@ -198,84 +163,77 @@ fun SecondScreen(onBack: () -> Unit) {
             )
         }
 
+
         val permissionList = listOf(
-            "Ses Kaydı" to Manifest.permission.RECORD_AUDIO,
-            "Depolama" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE,
-            "Konum" to Manifest.permission.ACCESS_FINE_LOCATION,
-            "Kamera" to Manifest.permission.CAMERA,
-            "Bildirim" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            "Ses Kaydı"      to Manifest.permission.RECORD_AUDIO,
+            "Depolama"       to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_IMAGES
+            else Manifest.permission.READ_EXTERNAL_STORAGE,
+            "Konum"          to Manifest.permission.ACCESS_FINE_LOCATION,
+            "Kamera"         to Manifest.permission.CAMERA,
+            "Bildirim"       to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                 Manifest.permission.POST_NOTIFICATIONS else "",
-            "SMS" to Manifest.permission.SEND_SMS,
-            "Kişiler" to Manifest.permission.READ_CONTACTS,
-            "Telefon Arama" to Manifest.permission.CALL_PHONE,
+            "SMS"            to Manifest.permission.SEND_SMS,
+            "Kişiler"        to Manifest.permission.READ_CONTACTS,
+            "Telefon Arama"  to Manifest.permission.CALL_PHONE,
         )
 
         permissionList.forEach { (name, permission) ->
             if (permission.isNotEmpty()) {
                 Button(
-                    onClick = {
-                        when (name) {
-                            "Kamera" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, cameraPermissionLauncher,
-                                    onGranted = { cameraLauncher.launch(null) }
-                                )
-                            }
-                            "Ses Kaydı" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, recordAudioPermissionLauncher,
-                                    onGranted = {
-                                        launchIntent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)
-                                    }
-                                )
-                            }
-                            "Depolama" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, storagePermissionLauncher,
-                                    onGranted = {
-                                        galleryLauncher.launch("*/*") // tüm dosyaları aç
-                                    }
-                                )
-                            }
-                            "SMS" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, smsPermissionLauncher,
-                                    onGranted = {
-                                        val smsIntent = Intent(Intent.ACTION_VIEW).apply {
-                                            data = Uri.parse("sms:")
-                                        }
-                                        context.startActivity(smsIntent)
-                                    }
-                                )
-                            }
-                            "Telefon Arama" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, callPhonePermissionLauncher,
-                                    onGranted = {
-                                        val callIntent = Intent(Intent.ACTION_DIAL)
-                                        context.startActivity(callIntent)
-                                    }
-                                )
-                            }
-                            "Bildirim" -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, notificationPermissionLauncher
-                                )
-                            }
-                            else -> {
-                                PermissionManager.checkAndRequestPermission(
-                                    context, permission, storagePermissionLauncher
-                                )
-                            }
-                        }
-                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
-                ) {
-                    Text(name)
-                }
+                        .padding(8.dp),
+                    onClick = {
+                        when (name) {
+                            "Kamera" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, cameraPermissionLauncher
+                            ) { cameraLauncher.launch(null) }
+
+                            "Depolama" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, storagePermissionLauncher
+                            ) { galleryLauncher.launch("*/*") }
+
+                            "Ses Kaydı" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, recordAudioPermissionLauncher
+                            ) {
+                                context.startActivity(Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION))
+                            }
+
+                            "Konum" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, locationPermissionLauncher
+                            ) {
+                                context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            }
+
+                            "Kişiler" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, contactsPermissionLauncher
+                            ) {
+                                val pick = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+                                context.startActivity(pick)
+                            }
+
+                            "SMS" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, smsPermissionLauncher
+                            ) {
+                                val sms = Intent(Intent.ACTION_VIEW, Uri.parse("sms:"))
+                                context.startActivity(sms)
+                            }
+
+                            "Telefon Arama" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, callPhonePermissionLauncher
+                            ) {
+                                context.startActivity(Intent(Intent.ACTION_DIAL))
+                            }
+
+                            "Bildirim" -> PermissionManager.checkAndRequestPermission(
+                                context, permission, notificationPermissionLauncher
+                            )
+
+                            else -> Unit
+                        }
+                    }
+                ) { Text(name) }
             }
         }
     }
